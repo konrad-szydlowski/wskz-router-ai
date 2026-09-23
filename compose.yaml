@@ -1,0 +1,56 @@
+# docker compose up -d        -> starts everything; the API answers at once (503 + progress until the model is ready)
+# docker compose up -d --wait -> returns only when the API is healthy (model downloaded, loaded, SMTP up)
+name: wskz-router
+
+services:
+  api:
+    build: ./api
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: ai-router@example.com
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      ollama:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      # healthy = model downloaded + loaded into RAM + SMTP reachable
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 5s
+      timeout: 6s
+      retries: 3
+      start_period: 30m # first start downloads ~1.9 GB of model weights
+    restart: unless-stopped
+
+  ollama:
+    # CPU build of Ollama (113 MB vs 9 GB for ollama/ollama with GPU runtimes); amd64 + arm64
+    image: alpine/ollama:0.34.2
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+    restart: unless-stopped
+
+  mailpit:
+    # SMTP catcher + web UI (MailHog successor, maintained, native amd64/arm64)
+    image: axllent/mailpit:v1.31.2
+    ports:
+      - "127.0.0.1:${MAIL_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
