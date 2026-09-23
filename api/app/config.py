@@ -1,4 +1,4 @@
-"""Runtime configuration read from environment variables (see compose.yaml / .env.example)."""
+"""Runtime configuration read from environment variables (see docker-compose.yml / .env.example)."""
 
 import os
 from dataclasses import dataclass

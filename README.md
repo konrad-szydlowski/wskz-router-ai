@@ -70,7 +70,7 @@ flowchart LR
 
 | wymaganie | realizacja | dowód |
 |---|---|---|
-| `docker compose up -d` stawia API, pocztę i Ollamę | `compose.yaml` | `docker compose up -d --wait` |
+| `docker compose up -d` stawia API, pocztę i Ollamę | `docker-compose.yml` | `docker compose up -d --wait` |
 | model pobiera się sam, bez dodatkowych kroków | API ciągnie model przez Ollama `/api/pull` przy starcie, potem rozgrzewa go w RAM | `api/app/model_manager.py`, `tests/test_model_manager.py` |
 | endpoint JSON `{email, message}` | `POST /api/v1/messages` | `tests/test_api.py` (6 przypadków 422) |
 | agent **sam** wysyła maila przez tool/function call | `@agent.tool send_email` | `tests/test_agent.py`, pole `sent_by` |

@@ -1,10 +1,10 @@
-"""compose.yaml guards: reproducible images, minimal exposed ports, readiness wiring."""
+"""docker-compose.yml guards: reproducible images, minimal exposed ports, readiness wiring."""
 
 from pathlib import Path
 
 import yaml
 
-COMPOSE = yaml.safe_load((Path(__file__).parents[2] / "compose.yaml").read_text())
+COMPOSE = yaml.safe_load((Path(__file__).parents[2] / "docker-compose.yml").read_text())
 SERVICES = COMPOSE["services"]
 
 

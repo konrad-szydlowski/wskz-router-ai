@@ -60,7 +60,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp)
         shutil.copytree(ROOT / "api", copy / "api", ignore=shutil.ignore_patterns("__pycache__", ".*cache"))
-        shutil.copy(ROOT / "compose.yaml", copy / "compose.yaml")
+        shutil.copy(ROOT / "docker-compose.yml", copy / "docker-compose.yml")
 
         code, tail = pytest(copy / "api")
         print(f"baseline: exit {code} | {tail}")
