@@ -27,7 +27,6 @@ def test_swagger_is_served_under_api_v1_docs(make_client):
         {"email": SENDER, "message": "x" * 5001},
         {"email": "to-nie-jest-email", "message": "Cześć"},
         {"message": "Brak adresu"},
-        {"email": SENDER, "message": "ok", "to": "ceo@example.com"},
     ],
 )
 def test_invalid_input_is_422_and_never_reaches_the_model(make_client, payload):
@@ -37,6 +36,13 @@ def test_invalid_input_is_422_and_never_reaches_the_model(make_client, payload):
     assert r.status_code == 422
     assert model.function.calls["n"] == 0
     assert mailer.sent == []
+
+
+def test_extra_fields_are_ignored_and_cannot_pick_the_recipient(make_client):
+    client, mailer = make_client(scripted(tool_call("help-desk@example.com")))
+    r = client.post("/api/v1/messages", json={"email": SENDER, "message": "Drukarka", "to": "ceo@example.com"})
+    assert r.status_code == 200
+    assert [m.to for m in mailer.sent] == ["help-desk@example.com"]
 
 
 def test_request_while_model_downloads_is_503_with_progress(make_client):
@@ -69,6 +75,57 @@ def test_subject_cannot_inject_mail_headers(subject):
     assert parsed["Bcc"] is None and parsed["X-Injected"] is None
     assert parsed["Reply-To"] == SENDER
     assert "\n" not in parsed["Subject"]
+
+
+def _reply_to(sender: str) -> tuple[bytes, str]:
+    mail = OutgoingMail(to="it@example.com", reply_to=sender, subject="Awaria", body="treść")
+    raw = SmtpMailer("localhost", 1025, "ai-router@example.com").build(mail).as_bytes()
+    return raw, message_from_bytes(raw)["Reply-To"]
+
+
+def test_reply_to_with_idn_domain_is_punycode_not_encoded_word():
+    raw, reply_to = _reply_to("jan@żółw.pl")
+    assert reply_to == "jan@xn--w-uga1v8h.pl"
+    assert b"=?utf-8?" not in raw.split(b"\n\n")[0].lower()
+
+
+def test_reply_to_with_non_ascii_local_part_is_raw_utf8_header():
+    raw, _ = _reply_to("józef@firma.pl")
+    assert "Reply-To: józef@firma.pl".encode() in raw
+
+
+class _FakeSmtp:
+    def __init__(self, *_, extensions=("smtputf8",), **__):
+        self.extensions, self.options = extensions, None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def ehlo(self):
+        pass
+
+    def has_extn(self, name):
+        return name in self.extensions
+
+    def send_message(self, msg, mail_options=()):
+        self.options = list(mail_options)
+
+
+def test_non_ascii_sender_uses_smtputf8_and_fails_loudly_without_it(monkeypatch):
+    import app.mailer as mailer_mod
+
+    fakes = []
+    monkeypatch.setattr(mailer_mod.smtplib, "SMTP", lambda *a, **k: fakes.append(_FakeSmtp(**k)) or fakes[-1])
+    mail = OutgoingMail(to="it@example.com", reply_to="józef@firma.pl", subject="Awaria", body="treść")
+    SmtpMailer("localhost", 1025, "ai-router@example.com").send(mail)
+    assert fakes[-1].options == ["SMTPUTF8", "BODY=8BITMIME"]
+
+    monkeypatch.setattr(mailer_mod.smtplib, "SMTP", lambda *a, **k: _FakeSmtp(extensions=()))
+    with pytest.raises(mailer_mod.MailerError, match="SMTPUTF8"):
+        SmtpMailer("localhost", 1025, "ai-router@example.com").send(mail)
 
 
 def test_empty_or_huge_subject_is_normalised():

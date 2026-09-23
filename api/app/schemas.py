@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class MessageIn(BaseModel):
     model_config = ConfigDict(
         str_strip_whitespace=True,
-        extra="forbid",
+        extra="ignore",  # "co najmniej dwa parametry": extra fields are accepted and ignored
         json_schema_extra={
             "examples": [
                 {"email": "jan.kowalski@firma.pl", "message": "Chciałbym zgłosić urlop od poniedziałku do piątku."},

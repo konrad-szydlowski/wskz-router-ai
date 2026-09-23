@@ -14,8 +14,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT, MAIN = "api/app/agent.py", "api/app/main.py"
+MAILER, CONFIG = "api/app/mailer.py", "api/app/config.py"
 
 MUTANTS = [  # (description, file, [(original text, replacement), ...])
+    (
+        "non-ASCII sender written as an RFC 2047 encoded-word (breaks Reply-To)",
+        MAILER,
+        [('msg["Reply-To"] = ascii_reply_to or mail.reply_to', 'msg["Reply-To"] = mail.reply_to')],
+    ),
+    ("auto picks 7B on any machine", CONFIG, [("ram_gib >= BIG_MODEL_MIN_RAM_GIB", "ram_gib >= 0")]),
     ("Reply-To set to the department instead of the sender", AGENT, [("reply_to=deps.sender", "reply_to=to")]),
     ("no nudge when the model answers with text only", AGENT, [("raise ModelRetry(NUDGE)", "pass")]),
     (

@@ -4,7 +4,9 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
+from app.config import mem_total_gib, pick_model
 from app.model_manager import ModelManager
 
 
@@ -79,3 +81,27 @@ def test_ollama_not_up_yet_is_retried():
     m = ModelManager("http://ollama", "qwen2.5:3b", retry_delay=0.01, transport=transport)
     run(m)
     assert m.status.ready
+
+
+@pytest.mark.parametrize(
+    ("requested", "ram_gib", "expected"),
+    [
+        ("auto", 15.5, "qwen2.5:7b"),
+        ("auto", 12.0, "qwen2.5:7b"),
+        ("auto", 11.9, "qwen2.5:3b"),
+        ("auto", 3.7, "qwen2.5:3b"),
+        ("auto", None, "qwen2.5:3b"),  # unknown RAM -> the model that fits anywhere
+        ("AUTO", 15.5, "qwen2.5:7b"),
+        ("qwen2.5:3b", 64.0, "qwen2.5:3b"),  # an explicit choice always wins
+        ("llama3.2:3b", None, "llama3.2:3b"),
+    ],
+)
+def test_auto_picks_7b_only_with_enough_ram(requested, ram_gib, expected):
+    assert pick_model(requested, ram_gib) == expected
+
+
+def test_mem_total_is_read_from_meminfo_and_missing_file_is_unknown(tmp_path):
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:       16252928 kB\nMemFree:         1000000 kB\n")
+    assert mem_total_gib(str(meminfo)) == 15.5
+    assert mem_total_gib(str(tmp_path / "missing")) is None

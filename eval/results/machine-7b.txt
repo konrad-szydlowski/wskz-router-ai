@@ -1,0 +1,4 @@
+qwen2.5:7b results (qwen2.5_7b-*.json), measured 2026-09-24 on a laptop:
+Linux 6.18 x86_64 (CachyOS), 12 CPU threads, 15 GiB RAM
+Ollama: alpine/ollama:0.34.2 = CPU only; the laptop's GPU was not used
+Stack started with: OLLAMA_MODEL=qwen2.5:7b docker compose up -d --wait

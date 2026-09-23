@@ -7,7 +7,7 @@ services:
     build: ./api
     environment:
       OLLAMA_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-auto} # auto = qwen2.5:7b with >= 12 GiB RAM, else qwen2.5:3b
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
       MAIL_FROM: ai-router@example.com
@@ -25,7 +25,7 @@ services:
       interval: 5s
       timeout: 6s
       retries: 3
-      start_period: 30m # first start downloads ~1.9 GB of model weights
+      start_period: 30m # first start downloads the model weights (3B ~1.9 GB, 7B ~4.7 GB)
     restart: unless-stopped
 
   ollama:
