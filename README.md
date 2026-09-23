@@ -169,5 +169,8 @@ python eval/run_eval.py --runs 3          # na działającym stacku
 
 Projekt powstał przy pomocy asystenta AI (Claude); decyzje, pomiary i testy są opisane wyżej i w historii commitów.
 
+Licencje modeli (pobiera je Ollama, nie ma ich w repo): `qwen2.5:7b` — Apache 2.0; `qwen2.5:3b` — Qwen Research License,
+do użytku komercyjnego trzeba licencji od Alibaba Cloud. Zależności Pythona: MIT/BSD/Apache/ISC/Unlicense.
+
 Wersje: tagi `vX.Y.Z` i [wydania](https://github.com/konrad-szydlowski/wskz-router-ai/releases); numer jest też w Swaggerze. Licencja: MIT (plik `LICENSE`).
 Zgłaszanie luk: `SECURITY.md`.
