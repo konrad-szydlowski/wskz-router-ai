@@ -1,6 +1,9 @@
 # AI message router (PoC)
 
 [![ci](https://github.com/konrad-szydlowski/wskz-router-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/konrad-szydlowski/wskz-router-ai/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/konrad-szydlowski/wskz-router-ai)](https://github.com/konrad-szydlowski/wskz-router-ai/releases)
+[![license](https://img.shields.io/github/license/konrad-szydlowski/wskz-router-ai)](LICENSE)
+![python](https://img.shields.io/badge/python-3.12-blue)
 
 Endpoint przyjmuje wiadomość `{email, message}`, lokalny model językowy (Ollama) decyduje, do którego działu ją skierować,
 i **sam wysyła maila wywołaniem narzędzia** `send_email` — do jednego z pięciu adresów, z `Reply-To` = nadawca.
@@ -140,7 +143,8 @@ wiadomości po angielsku, z literówkami, wiadomości bez sensu i 5 prób prompt
 `scripts/mutation_check.py` wstawia do kodu 9 błędów (Reply-To z adresu działu, Reply-To z polskimi znakami zakodowany
 niezgodnie z RFC 2047, brak ponaglenia, brak przerwania po wysyłce, podwójna wysyłka, adres spoza listy, równoległe wywołania
 narzędzia, adres nadawcy w logu, 7B wybierany na każdej maszynie) i wymaga, żeby każdy został wykryty — wynik: 9/9. CI uruchamia lint, testy, mutanty,
-`docker compose config` i budowę obrazu na każdym pushu.
+`docker compose config` i budowę obrazu na każdym pushu. Wersje pakietów, obrazów i Akcji są przypięte;
+Dependabot raz w miesiącu proponuje ich podbicie jako PR, który przechodzi to samo CI.
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate   # systemowy pip bywa zablokowany (PEP 668)
@@ -165,4 +169,5 @@ python eval/run_eval.py --runs 3          # na działającym stacku
 
 Projekt powstał przy pomocy asystenta AI (Claude); decyzje, pomiary i testy są opisane wyżej i w historii commitów.
 
-Licencja: MIT (plik `LICENSE`).
+Wersje: tagi `vX.Y.Z` i [wydania](https://github.com/konrad-szydlowski/wskz-router-ai/releases); numer jest też w Swaggerze. Licencja: MIT (plik `LICENSE`).
+Zgłaszanie luk: `SECURITY.md`.

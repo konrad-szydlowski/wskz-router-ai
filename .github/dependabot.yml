@@ -1,0 +1,33 @@
+# Versions of Python packages, images and Actions are pinned; Dependabot proposes bumps once a month,
+# one grouped PR per ecosystem, and each PR runs the same CI (lint, tests, mutants, image build).
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/api"
+    schedule:
+      interval: "monthly"
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      images:
+        patterns: ["*"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
