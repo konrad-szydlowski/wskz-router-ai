@@ -14,6 +14,10 @@ docker compose up -d --wait        # za pierwszym razem pobiera model (~1,9 GB);
 python3 scripts/smoke.py           # wysyła przykład i sprawdza maila w Mailpit: 4× PASS
 ```
 
+Trzecia komenda potrzebuje Pythona 3 na komputerze (tylko biblioteka standardowa, sprawdzone na 3.12). Bez Pythona
+wystarczy przykład cURL niżej i podgląd skrzynki w przeglądarce. Skrypt szuka maila po losowym znaczniku w adresie
+nadawcy, więc inne maile w tej samej skrzynce nie psują wyniku.
+
 | co | adres |
 |---|---|
 | Swagger | http://127.0.0.1:8000/api/v1/docs |
@@ -80,7 +84,7 @@ flowchart LR
 **`alpine/ollama` zamiast `ollama/ollama`.** Obraz CPU ma 113 MB zamiast ~9 GB (tamten wiezie biblioteki CUDA/ROCm).
 Zadanie dopuszcza ten obraz wprost, a PoC ma ruszyć na zwykłym laptopie. Działa na amd64 i arm64.
 
-**`qwen2.5:3b` zamiast modelu 7B.** Zmierzone: Ollama z modelem 3B zajmuje 2,1 GiB RAM. Model 7B nie był mierzony —
+**`qwen2.5:3b` zamiast modelu 7B.** Zmierzone (`docker stats`, trzy odczyty): Ollama z modelem 3B zajmuje 1,9–2,1 GiB RAM. Model 7B nie był mierzony —
 maszyna, na której powstał projekt, ma 3,8 GB RAM, a PoC ma ruszyć na zwykłym laptopie bez GPU. Qwen2.5 obsługuje wywołania narzędzi w Ollamie i rozumie polski; ile kosztuje mały rozmiar,
 pokazuje pomiar trafności niżej. Większy model to jedna zmienna: `OLLAMA_MODEL=qwen2.5:7b docker compose up -d --wait`.
 
@@ -95,17 +99,19 @@ walidator wyniku do ponagleń i `FunctionModel` do testów bez LLM. Klient ma li
 powtórki kontroluje agent, nie biblioteka HTTP.
 
 **Bez kolejki, bazy i autoryzacji** — to PoC; zapytania do modelu idą po jednym (semafor), bo CPU i tak liczy jedno naraz.
-Logi zawierają metadane (dział, czas, ponaglenia), nie treść wiadomości.
+Logi zawierają metadane (dział, czas, ponaglenia) — bez treści wiadomości i bez adresu nadawcy; pilnuje tego test i mutant.
 
 ## Jakość — pomiary
 
 **Trafność** (`eval/run_eval.py`, każdy przypadek 3×, wyniki w `eval/results/`, stan maszyny w `machine.txt`):
 
-| zbiór | przypadki | trafny dział | wysłane narzędziem | poprawny adres i `Reply-To` | ponaglenie | mediana / p90 czasu |
+| zbiór | przypadki | trafny dział (dopuszczalny) | wysłane narzędziem | poprawny adres i `Reply-To` | ponaglenie | mediana / p90 czasu |
 |---|---|---|---|---|---|---|
-| `dataset.jsonl` — na nim był strojony prompt | 40 × 3 | 111/120 (37/40 przypadków) | 117/120 | 117/117 | 24/120 | 7,95 s / 15,86 s |
-| `holdout.jsonl` — zamrożony, oglądany raz | 20 × 3 | 54/60 (18/20) | 57/60 | 57/57 | 15/60 | 8,45 s / 12,88 s |
+| `dataset.jsonl` — na nim był strojony prompt | 40 × 3 | 111/120 (37/40 przypadków); ściśle 102/120 | 117/120 | 117/117 | 24/120 | 7,95 s / 15,86 s |
+| `holdout.jsonl` — zamrożony, oglądany raz | 20 × 3 | 54/60 (18/20); ściśle też 54/60 | 57/60 | 57/57 | 15/60 | 8,45 s / 12,88 s |
 
+Każdy przypadek ma dział oczekiwany i listę dopuszczalnych — tylko przy wiadomościach pasujących do dwóch działów
+(np. „monitor nie wykrywa obrazu” → help-desk albo it). „Ściśle” liczy wyłącznie dział oczekiwany.
 Uczciwszą liczbą jest holdout: 20 wiadomości napisanych przed strojeniem promptu, z sumą SHA-256 zapisaną przed pierwszym
 uruchomieniem. Przy `temperature=0` każdy przypadek dał ten sam wynik we wszystkich 3 przebiegach. Na obu zbiorach
 żaden mail nie poszedł na adres spoza listy, bez `Reply-To` nadawcy ani w dwóch kopiach.
@@ -117,9 +123,9 @@ Każdy przypadek przechodzi pełną ścieżką: HTTP → agent → narzędzie �
 `Reply-To`, brak `Bcc` i to, że powstał dokładnie jeden mail. Zbiór: pary łatwe do pomylenia (kadry ↔ HR, help-desk ↔ IT),
 wiadomości po angielsku, z literówkami, wiadomości bez sensu i 5 prób prompt injection.
 
-**Testy** (`api/tests`, 33, bez LLM — skryptowany model i fałszywy serwer poczty) oraz **test testów**:
-`scripts/mutation_check.py` wstawia do kodu 6 błędów (Reply-To z adresu działu, brak ponaglenia, brak przerwania po wysyłce,
-podwójna wysyłka, adres spoza listy, równoległe wywołania narzędzia) i wymaga, żeby każdy został wykryty — wynik: 6/6. CI uruchamia lint, testy, mutanty,
+**Testy** (`api/tests`, 34, bez LLM — skryptowany model i fałszywy serwer poczty) oraz **test testów**:
+`scripts/mutation_check.py` wstawia do kodu 7 błędów (Reply-To z adresu działu, brak ponaglenia, brak przerwania po wysyłce,
+podwójna wysyłka, adres spoza listy, równoległe wywołania narzędzia, adres nadawcy w logu) i wymaga, żeby każdy został wykryty — wynik: 7/7. CI uruchamia lint, testy, mutanty,
 `docker compose config` i budowę obrazu na każdym pushu.
 
 ```bash

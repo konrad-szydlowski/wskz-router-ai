@@ -1,5 +1,6 @@
 """HTTP surface: validation, readiness, Swagger location, safe mail headers, bounded LLM output."""
 
+import logging
 from email import message_from_bytes
 
 import pytest
@@ -85,3 +86,13 @@ def test_llm_output_and_time_are_bounded(settings):
 
 async def _never():
     return None
+
+
+def test_log_has_metadata_but_no_personal_data(make_client, caplog):
+    client, _ = make_client(scripted(tool_call("kadry@example.com", "Numer konta do wypłaty")))
+    with caplog.at_level(logging.INFO):
+        r = post(client, "Zmieniłam bank, nowy numer konta 12 1020 0000 1111 2222 3333 4444.")
+    assert r.status_code == 200, r.text
+    assert "routed to=kadry@example.com" in caplog.text
+    assert SENDER not in caplog.text
+    assert "1111 2222" not in caplog.text

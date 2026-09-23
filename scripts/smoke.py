@@ -3,13 +3,19 @@ in Mailpit, addressed to one of the five departments, with Reply-To = sender (st
 
     python scripts/smoke.py                      # API on :8000, Mailpit UI on :8025
     python scripts/smoke.py --api http://127.0.0.1:8000 --mail http://127.0.0.1:8025
+
+The sender address carries a random token and the mail is looked up by it, so other traffic in the
+same Mailpit cannot be mistaken for this request's mail. Runs on Python 3.8+.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import sys
 import time
 import urllib.request
+import uuid
 
 DEPARTMENTS = {
     "human-resources@example.com",
@@ -18,7 +24,7 @@ DEPARTMENTS = {
     "kadry@example.com",
     "other@example.com",
 }
-EXAMPLE = {"email": "jan.kowalski@firma.pl", "message": "Dzień dobry, od rana nie mogę zalogować się do VPN."}
+MESSAGE = "Dzień dobry, od rana nie mogę zalogować się do VPN."
 
 
 def call(method: str, url: str, body: dict | None = None) -> dict:
@@ -34,11 +40,17 @@ def main() -> int:
     p.add_argument("--mail", default="http://127.0.0.1:8025")
     args = p.parse_args()
 
-    before = call("GET", f"{args.mail}/api/v1/messages?limit=1")["total"]
-    reply = call("POST", f"{args.api}/api/v1/messages", EXAMPLE)
-    time.sleep(0.5)  # SMTP -> Mailpit storage is asynchronous
-    inbox = call("GET", f"{args.mail}/api/v1/messages?limit=5")
-    new = inbox["messages"][: inbox["total"] - before]
+    token = uuid.uuid4().hex[:12]
+    sender = f"smoke{token}@firma.pl"
+    reply = call("POST", f"{args.api}/api/v1/messages", {"email": sender, "message": MESSAGE})
+    new: list[dict] = []
+    for _ in range(20):  # SMTP -> Mailpit storage is asynchronous
+        time.sleep(0.25)
+        new = call("GET", f"{args.mail}/api/v1/search?query={token}")["messages"]
+        if new:
+            time.sleep(0.5)  # a duplicate, if any, would arrive right behind
+            new = call("GET", f"{args.mail}/api/v1/search?query={token}")["messages"]
+            break
 
     checks = {
         "API answered status=sent via tool call": reply.get("status") == "sent"
@@ -47,8 +59,7 @@ def main() -> int:
         "recipient is one of the five departments": len(new) == 1
         and [a["Address"] for a in new[0]["To"]] == [reply.get("department")]
         and reply.get("department") in DEPARTMENTS,
-        "Reply-To is the sender": len(new) == 1
-        and [a["Address"] for a in new[0].get("ReplyTo") or []] == [EXAMPLE["email"]],
+        "Reply-To is the sender": len(new) == 1 and [a["Address"] for a in new[0].get("ReplyTo") or []] == [sender],
     }
     print(json.dumps(reply, ensure_ascii=False))
     for name, ok in checks.items():

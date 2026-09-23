@@ -7,7 +7,12 @@ Each case runs --runs times because a language model is not deterministic.
     python eval/run_eval.py                      # 3 runs, defaults to localhost ports
     python eval/run_eval.py --dataset holdout    # 20 cases never used while tuning the prompt
     python eval/run_eval.py --runs 1 --api http://127.0.0.1:8000 --mail http://127.0.0.1:8025
+
+Each request uses its own sender address with a random token and its mail is looked up by that token,
+so other traffic in the same Mailpit cannot be counted as this case's mail. Runs on Python 3.8+.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -16,10 +21,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).parent
-SENDER = "eval.sender@firma.pl"
 DEPARTMENTS = {
     "it@example.com",
     "help-desk@example.com",
@@ -39,22 +44,25 @@ def http(method: str, url: str, body: dict | None = None, timeout: float = 300) 
         return e.code, json.loads(e.read() or b"{}")
 
 
-def mail_total(mail: str) -> int:
-    return http("GET", f"{mail}/api/v1/messages?limit=1")[1]["total"]
-
-
-def new_mails(mail: str, before: int) -> list[dict]:
-    time.sleep(0.3)  # SMTP -> Mailpit storage is asynchronous
-    _, data = http("GET", f"{mail}/api/v1/messages?limit=10")
-    return data["messages"][: data["total"] - before]
+def mails_with(mail: str, token: str, expect_one: bool) -> list[dict]:
+    """Mails carrying this request's token (in the sender address, i.e. Reply-To and body)."""
+    found: list[dict] = []
+    for _ in range(20 if expect_one else 4):  # SMTP -> Mailpit storage is asynchronous
+        time.sleep(0.25)
+        found = http("GET", f"{mail}/api/v1/search?query={token}")[1]["messages"]
+        if found:
+            break
+    time.sleep(0.5)  # a duplicate, if any, would arrive right behind
+    return http("GET", f"{mail}/api/v1/search?query={token}")[1]["messages"]
 
 
 def run_case(case: dict, api: str, mail: str) -> dict:
-    before = mail_total(mail)
+    token = uuid.uuid4().hex[:12]
+    sender = f"eval{token}@firma.pl"
     started = time.perf_counter()
-    status, body = http("POST", f"{api}/api/v1/messages", {"email": SENDER, "message": case["message"]})
+    status, body = http("POST", f"{api}/api/v1/messages", {"email": sender, "message": case["message"]})
     latency = round(time.perf_counter() - started, 2)
-    mails = new_mails(mail, before)
+    mails = mails_with(mail, token, expect_one=status == 200)
     to = [a["Address"] for m in mails for a in m["To"]]
     reply_to = [a["Address"] for m in mails for a in (m.get("ReplyTo") or [])]
     bcc = [a["Address"] for m in mails for a in (m.get("Bcc") or [])]
@@ -68,7 +76,7 @@ def run_case(case: dict, api: str, mail: str) -> dict:
         "to": to,
         "one_mail": len(mails) == (1 if status == 200 else 0),
         "valid_department": dept in DEPARTMENTS if status == 200 else None,
-        "reply_to_ok": reply_to == [SENDER] if status == 200 else None,
+        "reply_to_ok": reply_to == [sender] if status == 200 else None,
         "no_bcc": not bcc,
         "hit_expected": dept == case["expected"],
         "hit_acceptable": dept in case["acceptable"],
@@ -123,7 +131,7 @@ def main() -> int:
     results = []
     for run in range(1, args.runs + 1):
         for case in cases:
-            r = run_case(case, args.api, args.mail) | {"run": run}
+            r = {**run_case(case, args.api, args.mail), "run": run}
             results.append(r)
             mark = "OK " if r["hit_acceptable"] else "MISS"
             print(

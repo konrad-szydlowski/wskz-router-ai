@@ -13,24 +13,37 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = "api/app/agent.py"
+AGENT, MAIN = "api/app/agent.py", "api/app/main.py"
 
-MUTANTS = [  # (description, [(original text, replacement), ...])
-    ("Reply-To set to the department instead of the sender", [("reply_to=deps.sender", "reply_to=to")]),
-    ("no nudge when the model answers with text only", [("raise ModelRetry(NUDGE)", "pass")]),
+MUTANTS = [  # (description, file, [(original text, replacement), ...])
+    ("Reply-To set to the department instead of the sender", AGENT, [("reply_to=deps.sender", "reply_to=to")]),
+    ("no nudge when the model answers with text only", AGENT, [("raise ModelRetry(NUDGE)", "pass")]),
     (
         "run not stopped after the mail is sent",
+        AGENT,
         [("if deps.sent is not None:\n                    break", "if False:\n                    break")],
     ),
     (
         "second tool call sends a second mail",
+        AGENT,
         [("if deps.sent is not None:\n            return", "if False:\n            return")],
     ),
     (
         "address outside the list accepted (schema and in-tool check both removed)",
+        AGENT,
         [("to: Department,", "to: str,"), ("if to not in DEPARTMENTS:", "if False:")],
     ),
-    ("parallel tool calls allowed (race: two mails)", [("@agent.tool(sequential=True)", "@agent.tool")]),
+    ("parallel tool calls allowed (race: two mails)", AGENT, [("@agent.tool(sequential=True)", "@agent.tool")]),
+    (
+        "sender address written to the log",
+        MAIN,
+        [
+            (
+                '"routed to=%s nudges=%s seconds=%s", result.mail.to,',
+                '"routed to=%s from=%s nudges=%s seconds=%s", result.mail.to, result.mail.reply_to,',
+            )
+        ],
+    ),
 ]
 
 
@@ -44,7 +57,6 @@ def pytest(cwd: Path) -> tuple[int, str]:
 
 
 def main() -> int:
-    original = (ROOT / TARGET).read_text(encoding="utf-8")
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp)
         shutil.copytree(ROOT / "api", copy / "api", ignore=shutil.ignore_patterns("__pycache__", ".*cache"))
@@ -56,7 +68,8 @@ def main() -> int:
             return 2
 
         survived = 0
-        for name, edits in MUTANTS:
+        for name, target, edits in MUTANTS:
+            original = (ROOT / target).read_text(encoding="utf-8")
             mutated = original
             for before, after in edits:
                 if mutated.count(before) != 1:
@@ -68,12 +81,12 @@ def main() -> int:
                 print(f"SKIPPED  {name}: pattern not found exactly once")
                 survived += 1
                 continue
-            (copy / TARGET).write_text(mutated, encoding="utf-8")
+            (copy / target).write_text(mutated, encoding="utf-8")
             code, tail = pytest(copy / "api")
             killed = code == 1
             survived += not killed
             print(f"{'KILLED  ' if killed else 'SURVIVED'} {name}: exit {code} | {tail}")
-        (copy / TARGET).write_text(original, encoding="utf-8")
+            (copy / target).write_text(original, encoding="utf-8")
 
     print(f"{len(MUTANTS) - survived}/{len(MUTANTS)} mutants killed")
     return 0 if survived == 0 else 1
