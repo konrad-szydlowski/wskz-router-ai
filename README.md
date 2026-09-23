@@ -25,8 +25,8 @@ nadawcy, więc inne maile w tej samej skrzynce nie psują wyniku.
 | skrzynka (Mailpit) | http://127.0.0.1:8025 |
 | gotowość | http://127.0.0.1:8000/api/v1/health |
 
-Bez `--wait` API odpowiada od pierwszej sekundy: dopóki model się pobiera, zwraca `503` z postępem
-(`"progress_percent": 43.3`), zamiast zrywać połączenie. Porty zajęte? `API_PORT=18000 MAIL_UI_PORT=18025 docker compose up -d --wait`.
+Bez `--wait` API wstaje kilka sekund po `up -d` (czeka na healthcheck Ollamy i Mailpit), a dopóki model się pobiera, zwraca `503`
+z postępem (`"progress_percent": 43.3`), zamiast zrywać połączenie. Porty zajęte? `API_PORT=18000 MAIL_UI_PORT=18025 docker compose up -d --wait`.
 Na stałe: `cp .env.example .env` i zmień wartości w `.env` (Compose czyta go sam).
 
 ### Przykład (cURL)

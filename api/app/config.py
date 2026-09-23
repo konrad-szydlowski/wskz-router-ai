@@ -8,7 +8,7 @@ def _int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
-# OLLAMA_MODEL=auto (default): the 7B model where the Docker host/VM has room for it, 3B otherwise (DECYZJE.md D4b).
+# OLLAMA_MODEL=auto (default): the 7B model where the Docker host/VM has room for it, 3B otherwise (see README).
 # MemTotal, not MemAvailable: the choice must not flip when the API restarts while Ollama already holds 7B in RAM.
 BIG_MODEL, SMALL_MODEL = "qwen2.5:7b", "qwen2.5:3b"
 BIG_MODEL_MIN_RAM_GIB = 12
