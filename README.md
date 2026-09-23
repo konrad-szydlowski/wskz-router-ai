@@ -26,6 +26,7 @@ nadawcy, więc inne maile w tej samej skrzynce nie psują wyniku.
 
 Bez `--wait` API odpowiada od pierwszej sekundy: dopóki model się pobiera, zwraca `503` z postępem
 (`"progress_percent": 43.3`), zamiast zrywać połączenie. Porty zajęte? `API_PORT=18000 MAIL_UI_PORT=18025 docker compose up -d --wait`.
+Na stałe: `cp .env.example .env` i zmień wartości w `.env` (Compose czyta go sam).
 
 ### Przykład (cURL)
 
@@ -92,7 +93,8 @@ pokazuje pomiar trafności niżej. Większy model to jedna zmienna: `OLLAMA_MODE
 a jego obraz ma tylko wersję amd64; Mailpit to jego następca z tym samym SMTP/UI, API JSON (skąd eval czyta nagłówki) i healthcheckiem.
 
 **Model pobiera API, nie osobny kontener „init”.** Dzięki temu API zna postęp pobierania i zwraca go w `503`
-oraz w `/api/v1/health`; restart nie pobiera modelu ponownie (wolumen `ollama-models`).
+oraz w `/api/v1/health`; restart nie pobiera modelu ponownie (wolumen `ollama-models`). Po restarcie samego kontenera `ollama` model
+ładuje się do pamięci od nowa, więc pierwsze zapytanie trwa jak przy starcie (~50 s na 2 vCPU), kolejne znów kilka sekund.
 
 **pydantic-ai przez endpoint OpenAI-kompatybilny Ollamy.** Typowane narzędzia (enum adresów trafia do schematu JSON narzędzia),
 walidator wyniku do ponagleń i `FunctionModel` do testów bez LLM. Klient ma limit czasu i `max_retries=0` —
@@ -140,6 +142,11 @@ python eval/run_eval.py --runs 3          # na działającym stacku
 - Na CPU (2 vCPU) odpowiedź trwa zwykle kilka–kilkanaście sekund; pierwsza po starcie dłużej.
 - Model 3B myli ok. 1 wiadomość na 10 (holdout 18/20); pomyłki są wypisane w plikach wyniku.
 - Wystawione są tylko porty API i UI poczty, na `127.0.0.1`; Ollama i SMTP zostają w sieci Compose.
+- Dane osobowe (RODO): treść i adres nadawcy nie opuszczają maszyny — model działa lokalnie, bez zewnętrznych API.
+  Log zawiera tylko dział, liczbę ponagleń i czas (pilnuje tego test i mutant). Mailpit trzyma maile w kontenerze
+  bez wolumenu, więc `docker compose down` je usuwa.
+- To PoC: endpoint nie ma uwierzytelniania ani limitu zapytań. Przed produkcją trzeba dodać oba oraz zasady
+  przechowywania maili.
 
 Projekt powstał przy pomocy asystenta AI (Claude); decyzje, pomiary i testy są opisane wyżej i w historii commitów.
 
