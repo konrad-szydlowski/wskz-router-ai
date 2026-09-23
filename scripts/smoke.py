@@ -14,6 +14,7 @@ import argparse
 import json
 import sys
 import time
+import urllib.error
 import urllib.request
 import uuid
 
@@ -30,8 +31,15 @@ MESSAGE = "Dzień dobry, od rana nie mogę zalogować się do VPN."
 def call(method: str, url: str, body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        return json.loads(r.read() or b"{}")
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            raw, code = r.read(), r.status
+    except urllib.error.HTTPError as e:  # 4xx/5xx: keep the body, it says what went wrong
+        raw, code = e.read(), e.code
+    try:
+        return json.loads(raw or b"{}")
+    except ValueError:
+        return {"http": code, "body": raw[:200].decode(errors="replace")}
 
 
 def main() -> int:
@@ -40,16 +48,24 @@ def main() -> int:
     p.add_argument("--mail", default="http://127.0.0.1:8025")
     args = p.parse_args()
 
+    try:
+        return run(args.api, args.mail)
+    except urllib.error.URLError as e:  # nothing listening: stack not up or wrong port
+        print(f"FAIL  cannot reach the stack ({e.reason}) — is `docker compose up -d --wait` done?")
+        return 1
+
+
+def run(api: str, mail: str) -> int:
     token = uuid.uuid4().hex[:12]
     sender = f"smoke{token}@firma.pl"
-    reply = call("POST", f"{args.api}/api/v1/messages", {"email": sender, "message": MESSAGE})
+    reply = call("POST", f"{api}/api/v1/messages", {"email": sender, "message": MESSAGE})
     new: list[dict] = []
-    for _ in range(20):  # SMTP -> Mailpit storage is asynchronous
+    for _ in range(20 if reply.get("status") == "sent" else 4):  # SMTP -> Mailpit storage is asynchronous
         time.sleep(0.25)
-        new = call("GET", f"{args.mail}/api/v1/search?query={token}")["messages"]
+        new = call("GET", f"{mail}/api/v1/search?query={token}")["messages"]
         if new:
             time.sleep(0.5)  # a duplicate, if any, would arrive right behind
-            new = call("GET", f"{args.mail}/api/v1/search?query={token}")["messages"]
+            new = call("GET", f"{mail}/api/v1/search?query={token}")["messages"]
             break
 
     checks = {
